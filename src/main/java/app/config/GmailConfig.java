@@ -1,4 +1,4 @@
-package app.auth;
+package app.config;
 
 import app.Main;
 import com.google.api.client.auth.oauth2.Credential;
@@ -13,6 +13,8 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -22,7 +24,13 @@ import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
 
-public class GmailClient {
+@Configuration
+public class GmailConfig {
+
+    @Bean
+    public Gmail gmailService() throws Exception {
+        return getGmailService();
+    }
 
     /**
      * Application name.
@@ -83,5 +91,7 @@ public class GmailClient {
 
         return service;
     }
+
+
 
 }
