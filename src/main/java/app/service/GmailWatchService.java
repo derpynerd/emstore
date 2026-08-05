@@ -1,6 +1,7 @@
 package app.service;
 
 import app.constants.Constants;
+import app.repository.GmailStateRepository;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.WatchRequest;
 import com.google.api.services.gmail.model.WatchResponse;
@@ -16,12 +17,12 @@ import java.util.List;
 public class GmailWatchService {
 
     private final Gmail gmail;
-    private final historyState historyState;
+    private final GmailStateRepository stateRepository;
 
     @Autowired
-    public GmailWatchService(Gmail gmail, historyState historyState) {
+    public GmailWatchService(Gmail gmail, GmailStateRepository stateRepository) {
         this.gmail = gmail;
-        this.historyState = historyState;
+        this.stateRepository = stateRepository;
     }
 
     public void startWatch() throws IOException {
@@ -33,7 +34,9 @@ public class GmailWatchService {
                 .watch(Constants.USER, request)
                 .execute();
 
-        historyState.setLastHistoryId(response.getHistoryId());
+        stateRepository.saveHistoryId(
+                response.getHistoryId().longValue()
+        );
 
         log.info("Watch started! :: HistoryId: {}, Expiration: {}", response.getHistoryId(), response.getExpiration());
     }
