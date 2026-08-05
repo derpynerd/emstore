@@ -3,16 +3,17 @@ package app.service;
 import app.constants.Constants;
 import app.dto.GmailNotification;
 import com.google.api.services.gmail.Gmail;
-import com.google.api.services.gmail.model.History;
-import com.google.api.services.gmail.model.HistoryMessageAdded;
-import com.google.api.services.gmail.model.ListHistoryResponse;
-import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.*;
+import lombok.extern.slf4j.Slf4j;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.math.BigInteger;
 
+@Slf4j
 @Service
 public class WebhookService {
 

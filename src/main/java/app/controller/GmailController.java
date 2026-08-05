@@ -5,6 +5,7 @@ import app.dto.PubSubPushRequest;
 import app.service.GmailWatchService;
 import app.service.WebhookService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+@Slf4j
 @RestController
 @RequestMapping("/gmail")
 public class GmailController {
@@ -53,8 +55,7 @@ public class GmailController {
             GmailNotification notification =
                     objectMapper.readValue(decodedJson, GmailNotification.class);
 
-            System.out.println("Email: " + notification.emailAddress());
-            System.out.println("History ID: " + notification.historyId());
+            log.info("Email: {}, HistoryID: {}", notification.emailAddress(), notification.historyId());
 
             // Business logic
             webhookService.processMessage(notification);
@@ -62,7 +63,7 @@ public class GmailController {
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {
-            System.out.println("Caught Exception in WebhookController: " + e);
+            log.info("Caught Exception in WebhookController: ", e);
             return ResponseEntity.internalServerError().build();
         }
     }

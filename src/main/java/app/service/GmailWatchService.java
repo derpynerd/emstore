@@ -4,13 +4,14 @@ import app.constants.Constants;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.WatchRequest;
 import com.google.api.services.gmail.model.WatchResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.List;
 
-
+@Slf4j
 @Service
 public class GmailWatchService {
 
@@ -34,9 +35,7 @@ public class GmailWatchService {
 
         historyState.setLastHistoryId(response.getHistoryId());
 
-        System.out.println("Watch started!");
-        System.out.println("HistoryId: " + response.getHistoryId());
-        System.out.println("Expiration: " + response.getExpiration());
+        log.info("Watch started! :: HistoryId: {}, Expiration: {}", response.getHistoryId(), response.getExpiration());
     }
 
 }
