@@ -8,9 +8,6 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.*;
 import lombok.extern.slf4j.Slf4j;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -25,93 +22,106 @@ public class WebhookService {
     private final GmailStateRepository stateRepository;
     private final GmailNotificationRepository notificationRepository;
 
-    @Autowired
-    public WebhookService(Gmail gmail, GmailStateRepository stateRepository, GmailNotificationRepository notificationRepository) {
+    public WebhookService(
+            Gmail gmail,
+            GmailStateRepository stateRepository,
+            GmailNotificationRepository notificationRepository) {
+
         this.gmail = gmail;
         this.stateRepository = stateRepository;
         this.notificationRepository = notificationRepository;
     }
 
-    private record EmailData(String date, String sender, String subject) {}
+    private record EmailData(
+            String date,
+            String sender,
+            String subject) {
+    }
 
     public void processMessage(GmailNotification notification) throws IOException {
 
-        BigInteger historyId = stateRepository.getHistoryId() != null ?
-                BigInteger.valueOf(stateRepository.getHistoryId()) : notification.historyId();
-        log.info("HistoryID: {}", historyId);
+        BigInteger startHistoryId = getStartHistoryId(notification);
+
+        log.info("Fetching history from {}", startHistoryId);
 
         ListHistoryResponse historyResponse = gmail.users()
                 .history()
                 .list(Constants.USER)
-                .setStartHistoryId(historyId)
+                .setStartHistoryId(startHistoryId)
                 .execute();
 
-        List<History> historyList = historyResponse.getHistory();
+        List<History> histories = historyResponse.getHistory();
 
-        if (historyList == null || historyList.isEmpty()) {
-            log.warn("No history records returned.");
+        if (histories == null || histories.isEmpty()) {
+            log.info("No new history records.");
             return;
         }
 
-        for (History history : historyResponse.getHistory()) {
-
-            if (history.getMessagesAdded() != null) {
-
-                for (HistoryMessageAdded added : history.getMessagesAdded()) {
-
-                    if (messageLabelsDontIncludeInbox(added)) continue;
-
-                    String messageId = added.getMessage().getId();
-                    String threadId = added.getMessage().getThreadId();
-
-                    log.info("Processing: {}", messageId);
-                    Message message = getMessage(messageId);
-                    if (message == null) continue;
-
-                    EmailData emailData = extractEmailData(message);
-
-                    saveDataInDatabase(history, messageId, threadId, emailData);
-                    log.info("Saved notification: {}", messageId);
-                }
-            }
+        for (History history : histories) {
+            processHistory(history);
         }
 
-        log.info("Updating HistoryID: {}", historyResponse.getHistory());
-        stateRepository.saveHistoryId(
-                historyResponse.getHistoryId().longValue()
-        );
+        updateStoredHistoryId(historyResponse.getHistoryId());
     }
 
-    private void saveDataInDatabase(History history, String messageId, String threadId, EmailData emailData) {
-        Long historyRecordId = Long.parseLong(history.getId().toString());
+    private BigInteger getStartHistoryId(GmailNotification notification) {
+        Long storedHistoryId = stateRepository.getHistoryId();
+
+        return storedHistoryId != null
+                ? BigInteger.valueOf(storedHistoryId)
+                : notification.historyId();
+    }
+
+    private void processHistory(History history) throws IOException {
+
+        if (history.getMessagesAdded() == null) {
+            return;
+        }
+
+        for (HistoryMessageAdded added : history.getMessagesAdded()) {
+            processAddedMessage(history, added);
+        }
+    }
+
+    private void processAddedMessage(
+            History history,
+            HistoryMessageAdded added) throws IOException {
+
+        if (!isInboxMessage(added)) {
+            return;
+        }
+
+        Message historyMessage = added.getMessage();
+
+        String messageId = historyMessage.getId();
+        String threadId = historyMessage.getThreadId();
+
+        log.info("Processing message {}", messageId);
+
+        Message message = fetchMessage(messageId);
+
+        if (message == null) {
+            return;
+        }
+
+        EmailData emailData = extractEmailData(message);
+
         notificationRepository.saveEmail(
                 messageId,
                 threadId,
                 emailData.subject(),
                 emailData.sender(),
                 emailData.date(),
-                historyRecordId
+                history.getId().longValue()
         );
+
+        log.info("Saved notification {}", messageId);
     }
 
-    private static @NonNull EmailData extractEmailData(Message message) {
-        String date = "";
-        String sender = "";
-        String subject = "";
-        for (MessagePartHeader header : message.getPayload().getHeaders()) {
-            switch (header.getName()) {
-                case "Subject" -> subject = header.getValue();
-                case "From" -> sender = header.getValue();
-                case "Date" -> date = header.getValue();
-            }
-        }
-        return new EmailData(date, sender, subject);
-    }
+    private Message fetchMessage(String messageId) throws IOException {
 
-    private @Nullable Message getMessage(String messageId) throws IOException {
-        Message message = null;
         try {
-            message = gmail.users()
+            return gmail.users()
                     .messages()
                     .get(Constants.USER, messageId)
                     .setFormat("metadata")
@@ -119,21 +129,45 @@ public class WebhookService {
                     .execute();
 
         } catch (GoogleJsonResponseException e) {
+
             if (e.getStatusCode() == 404) {
-                log.warn("Message {} no longer exists. Skipping.", messageId);
+                log.warn("Message {} no longer exists.", messageId);
                 return null;
             }
+
             throw e;
         }
-        return message;
     }
 
-    private static boolean messageLabelsDontIncludeInbox(HistoryMessageAdded added) {
-        Message historyMessage = added.getMessage();
+    private EmailData extractEmailData(Message message) {
 
-        List<String> labels = historyMessage.getLabelIds();
+        String subject = "";
+        String sender = "";
+        String date = "";
 
-        return labels == null || !labels.contains("INBOX");
+        for (MessagePartHeader header : message.getPayload().getHeaders()) {
+
+            switch (header.getName()) {
+                case "Subject" -> subject = header.getValue();
+                case "From" -> sender = header.getValue();
+                case "Date" -> date = header.getValue();
+            }
+        }
+
+        return new EmailData(date, sender, subject);
     }
 
+    private boolean isInboxMessage(HistoryMessageAdded added) {
+
+        List<String> labels = added.getMessage().getLabelIds();
+
+        return labels != null && labels.contains("INBOX");
+    }
+
+    private void updateStoredHistoryId(BigInteger historyId) {
+
+        log.info("Updating historyId to {}", historyId);
+
+        stateRepository.saveHistoryId(historyId.longValue());
+    }
 }
