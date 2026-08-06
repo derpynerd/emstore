@@ -4,8 +4,9 @@
 > Application to store received emails in a database
 
 ### Technologies
-- [Google Cloud Pub/Sub](https://docs.cloud.google.com/pubsub/docs/overview)
+- [ngrok](https://ngrok.com/)
 - [SQLite](https://sqlite.org/index.html)
+- [Google Cloud Pub/Sub](https://docs.cloud.google.com/pubsub/docs/overview)
 
 ### Setup
 1. Create a Google Cloud Project
@@ -29,6 +30,6 @@
 `/watch` - Trigger watch request to Google Cloud Pub/Sub Service  
 `/webhook` - Receive push events from Google Cloud Pub/Sub Service
 
-### Databases
-- `gmail_state` - Keep track of received histories to avoid reprocessing events
-- `emails` - Store email information
+### Schemas
+- `gmail_state(id, history_id)` - Keep track of received histories to avoid reprocessing events
+- `emails(id, gmail_message_id, thread_id, subject, sender, received_at, history_id)` - Store email information
